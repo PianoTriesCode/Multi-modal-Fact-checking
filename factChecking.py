@@ -203,12 +203,14 @@ class FactCheckingPipeline:
         try:
             # Step 1: Gather evidence using search tool
             evidence = await search_fact_tool.ainvoke({"claim": claim})
+            await asyncio.sleep(RATE_LIMIT)
             
             # Step 2: Analyze with verification chain
             verdict_response = await self.verifier.ainvoke({
                 "claim": claim, 
                 "evidence": evidence
             })
+            await asyncio.sleep(RATE_LIMIT)
             
             verdict = verdict_response.content.strip()
             
@@ -216,7 +218,6 @@ class FactCheckingPipeline:
             confidence = "high" if verdict in ["True", "False"] else "medium"
             
             # Rate limiting
-            await asyncio.sleep(RATE_LIMIT)
             
             return {
                 "claim": claim,

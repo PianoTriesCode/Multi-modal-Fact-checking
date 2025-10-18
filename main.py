@@ -20,18 +20,19 @@ async def main():
     fact_checker = FactCheckingAgentol()
     
     # Sample texts for testing
-    sample_texts = [
-        """
-        The Eiffel Tower is located in Paris,France. It was built in 1889 and is 330 meters tall. 
-        Napoleon Bonaparte ordered its construction. The tower has exactly 1665 steps to the top.
-        """,
-        """
-        Climate change is primarily caused by human activities. 
-        The Great Wall of China is visible from space with the naked eye. 
-        Humans only use 10 percent of their brain capacity. 
-        Vitamin C can prevent the common cold.
-        """
-    ]
+    # sample_texts = [
+    #     """
+    #     The Eiffel Tower is located in Paris,France. It was built in 1889 and is 330 meters tall. 
+    #     Napoleon Bonaparte ordered its construction. The tower has exactly 1665 steps to the top.
+    #     """,
+    #     """
+    #     Climate change is primarily caused by human activities. 
+    #     The Great Wall of China is visible from space with the naked eye. 
+    #     Humans only use 10 percent of their brain capacity. 
+    #     Vitamin C can prevent the common cold.
+    #     """
+    # ]
+    sample_texts = ["sample1.wav"]
     
     for i, text in enumerate(sample_texts, 1):
         print(f"\n{'='*80}")
@@ -81,7 +82,10 @@ if __name__ == "__main__":
         print("Error: MISTRAL_API_KEY not found in environment variables")
         print("Please create a .env file with your Mistral API key")
         exit(1)
-    
+    if not os.getenv("HUGGINGFACE_API_KEY"):
+        print("Error: HUGGINGFACE_API_KEY not found in environment variables")
+        print("Please create a .env file with your HuggingFace API key")
+        exit(1)
     # Run the main system
     asyncio.run(main())
     

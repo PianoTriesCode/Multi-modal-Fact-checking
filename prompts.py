@@ -4,7 +4,6 @@ Prompt Templates for the Fact-Checking System
 
 from langchain.prompts import PromptTemplate
 
-# Claim Extraction Prompts
 CLAIM_EXTRACTION_PROMPT = PromptTemplate(
     input_variables=["text"],
     template="""Extract concise, factual, and verifiable statements from the following text.

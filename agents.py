@@ -5,10 +5,11 @@ Agents for the Fact-Checking System
 import asyncio
 import time
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Union, Any
 from langchain.schema import BaseOutputParser
 from langchain_core.runnables import RunnableSequence
 import re
+from transformers import pipeline
 
 from tools import search_fact_tool, extract_claims_tool, llm
 from prompts import CLAIM_EXTRACTION_PROMPT, VERIFICATION_PROMPT
@@ -23,6 +24,25 @@ class ClaimParser(BaseOutputParser):
                 claims.append(line)
         return claims[:10]  # Max 10 claims
 
+
+class AudioAgent:
+    def __init__(self, model_name="openai/whisper-small"):
+        """
+        Initialize a Hugging Face Whisper transcriber pipeline.
+        """
+        self.transcriber = pipeline(
+            "automatic-speech-recognition",
+            model=model_name,
+        )
+
+    def transcribe(self, audio_path: str) -> str:
+        """
+        Transcribes audio to text.
+        """
+        print(f"Transcribing: {audio_path} ...")
+        result = self.transcriber(audio_path)
+        return result["text"]
+
 class ClaimExtractorAgent:
     """Agent for extracting factual claims from text"""
     
@@ -32,7 +52,7 @@ class ClaimExtractorAgent:
     async def extract_claims(self, text: str) -> List[str]:
         """Extract claims from input text"""
         try:
-            time.sleep(3)
+            await asyncio.sleep(3)
             claims = await self.chain.ainvoke({"text": text})
             logging.info(f"Extracted {len(claims)} claims")
             return claims
@@ -53,44 +73,58 @@ class ClaimVerifierAgent:
         try:
             # Get evidence using search tool
             evidence = await search_fact_tool.ainvoke({"claim": claim})
-            
+            await asyncio.sleep(2)
             # Analyze with verification chain
             verdict_response = await self.chain.ainvoke({
                 "claim": claim, 
                 "evidence": evidence
             })
+            await asyncio.sleep(2)
             
             verdict = verdict_response.content.strip()
             confidence = "high" if verdict in ["True", "False"] else "medium"
-            
-            # Rate limiting
-            await asyncio.sleep(2)
-            
             return {
                 "claim": claim,
                 "verdict": verdict,
                 "confidence": confidence,
                 "evidence_snippet": evidence[:200] + "..." if len(evidence) > 200 else evidence
             }
-            
         except Exception as e:
             logging.error(f"Verification failed for '{claim}': {e}")
             return {"claim": claim, "verdict": f"Error: {str(e)}", "confidence": "low"}
+        
+class RouterAgent:
+    def __init__(self):
+        self.audio_agent = AudioAgent()
 
+    def route_input(self, input_data):
+        if input_data.endswith((".wav", ".mp3", ".flac", ".m4a")):
+            return "audio"
+        return "text"
+
+    def handle(self, input_data):
+        route = self.route_input(input_data)
+        if route == "audio":
+            text = self.audio_agent.transcribe(input_data)
+            return {"type": "audio", "content": text}
+        else:
+            return {"type": "text", "content": input_data}
 class FactCheckingAgentol:
     """Main fact-checking agent that orchestrates the pipeline"""
     
     def __init__(self):
+        self.router = RouterAgent()
         self.claim_extractor = ClaimExtractorAgent()
         self.claim_verifier = ClaimVerifierAgent()
     
-    async def fact_check(self, text: str) -> Dict[str, Any]:
+    async def fact_check(self, input_data: Union[str,bytes]) -> Dict[str, Any]:
         """Run the complete fact-checking pipeline"""
         start_time = time.time()
-        
+        #Step 0 : Route input
+        route_result = self.router.handle(input_data)
         # Step 1: Extract claims
         print("Extracting claims...")
-        claims = await self.claim_extractor.extract_claims(text)
+        claims = await self.claim_extractor.extract_claims(route_result["content"])
         
         if not claims:
             return {
@@ -101,13 +135,10 @@ class FactCheckingAgentol:
             }
         
         print(f"Found {len(claims)} claims to verify")
-        
-        # Step 2: Verify claims in parallel
         print("Verifying claims...")
         verification_tasks = [self.claim_verifier.verify_claim(claim) for claim in claims]
-        results = await asyncio.gather(*verification_tasks, return_exceptions=True)
+        results = await asyncio.gather(*verification_tasks, return_exceptions=True) #waits on all claims
         
-        # Process results
         final_results = []
         for result in results:
             if isinstance(result, Exception):
@@ -115,7 +146,6 @@ class FactCheckingAgentol:
                 continue
             final_results.append(result)
         
-        # Generate summary
         summary = self._generate_summary(final_results)
         
         return {
