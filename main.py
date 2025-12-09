@@ -32,7 +32,7 @@ async def main():
     #     Vitamin C can prevent the common cold.
     #     """
     # ]
-    sample_texts = ["sample1.wav"]
+    sample_texts = ["sample1.jpg"]
     
     for i, text in enumerate(sample_texts, 1):
         print(f"\n{'='*80}")

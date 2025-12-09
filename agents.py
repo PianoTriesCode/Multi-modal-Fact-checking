@@ -10,6 +10,7 @@ from langchain.schema import BaseOutputParser
 from langchain_core.runnables import RunnableSequence
 import re
 from transformers import pipeline
+from PIL import Image
 
 from tools import search_fact_tool, extract_claims_tool, llm
 from prompts import CLAIM_EXTRACTION_PROMPT, VERIFICATION_PROMPT
@@ -42,6 +43,30 @@ class AudioAgent:
         print(f"Transcribing: {audio_path} ...")
         result = self.transcriber(audio_path)
         return result["text"]
+
+class ImageAgent:
+    """Agent to handle image inputs and generate text descriptions."""
+
+    def __init__(self):
+        print("Loading image captioning model...")
+        self.captioner = pipeline(
+            "image-to-text",
+            model="Salesforce/blip-image-captioning-base"
+        )
+        print("ImageAgent ready.")
+
+    def describe(self, image_path: str) -> str:
+        """Generate a description of the image."""
+        try:
+            image = Image.open(image_path)
+            result = self.captioner(image)
+            caption = result[0]['generated_text']
+            print(f"[ImageAgent] Caption generated: {caption}")
+            return caption
+        except Exception as e:
+            print(f"[ImageAgent] Error describing image: {e}")
+            return "Error: Could not process image."
+
 
 class ClaimExtractorAgent:
     """Agent for extracting factual claims from text"""
@@ -96,10 +121,13 @@ class ClaimVerifierAgent:
 class RouterAgent:
     def __init__(self):
         self.audio_agent = AudioAgent()
+        self.image_agent = ImageAgent()
 
     def route_input(self, input_data):
         if input_data.endswith((".wav", ".mp3", ".flac", ".m4a")):
             return "audio"
+        elif isinstance(input_data, str) and input_data.endswith((".png",".jpg",".jpeg")):
+            return "image"
         return "text"
 
     def handle(self, input_data):
@@ -107,8 +135,13 @@ class RouterAgent:
         if route == "audio":
             text = self.audio_agent.transcribe(input_data)
             return {"type": "audio", "content": text}
+        elif route == "image":
+            caption = self.image_agent.describe(input_data)
+            return {"type" : "image", "content" : caption}
+
         else:
             return {"type": "text", "content": input_data}
+        
 class FactCheckingAgentol:
     """Main fact-checking agent that orchestrates the pipeline"""
     
