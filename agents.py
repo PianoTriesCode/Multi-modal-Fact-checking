@@ -6,7 +6,7 @@ import asyncio
 import time
 import logging
 from typing import List, Dict, Union, Any
-from langchain.schema import BaseOutputParser
+from langchain_core.schema import BaseOutputParser
 from langchain_core.runnables import RunnableSequence
 import re
 from transformers import pipeline

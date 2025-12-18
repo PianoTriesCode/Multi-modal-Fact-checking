@@ -3,11 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-SEARX_HOST = os.getenv("SEARX_HOST", "http://127.0.0.1:8089")
+# CHANGED: Replaced MISTRAL_API_KEY and SEARX_HOST with OPENAI and TAVILY keys
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 # Model settings
-MODEL_NAME = "mistral-medium"
+# CHANGED: Updated model name to a GPT model
+MODEL_NAME = "gpt-4o" 
 MODEL_TEMPERATURE = 0.2
 MAX_TOKENS = 500
 

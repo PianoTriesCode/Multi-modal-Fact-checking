@@ -76,11 +76,14 @@ async def demo_tools():
     evidence = await search_fact_tool.ainvoke({"claim": "Moon landing year"})
     print(f"Search result preview: {evidence[:150]}...")
 
+# ... (imports and main function remain the same) ...
+
 if __name__ == "__main__":
     # Check for API key
-    if not os.getenv("MISTRAL_API_KEY"):
-        print("Error: MISTRAL_API_KEY not found in environment variables")
-        print("Please create a .env file with your Mistral API key")
+    # CHANGED: Check for OPENAI_API_KEY
+    if not os.getenv("OPENAI_API_KEY"):
+        print("Error: OPENAI_API_KEY not found in environment variables")
+        print("Please create a .env file with your OpenAI API key")
         exit(1)
     if not os.getenv("HUGGINGFACE_API_KEY"):
         print("Error: HUGGINGFACE_API_KEY not found in environment variables")
@@ -88,6 +91,5 @@ if __name__ == "__main__":
         exit(1)
     # Run the main system
     asyncio.run(main())
-    
     # Optional: Demo tools
     # asyncio.run(demo_tools())

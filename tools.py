@@ -6,29 +6,31 @@ import os
 import re
 from typing import List
 from langchain_core.tools import tool
-from langchain_community.utilities import SearxSearchWrapper
-from langchain_mistralai import ChatMistralAI
+# CHANGED: Import Tavily and OpenAI instead of Searx and Mistral
+from langchain_community.tools import TavilySearchResults
+from langchain_openai import ChatOpenAI
 from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
 import logging
 from dotenv import load_dotenv
 
 # Initialize components
 load_dotenv()
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-if not MISTRAL_API_KEY:
-    raise ValueError("MISTRAL_API_KEY environment variable is not set")
+# CHANGED: Check for OPENAI_API_KEY
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is not set")
 
-llm = ChatMistralAI(
-    model="mistral-medium", 
+# CHANGED: Initialize ChatOpenAI
+llm = ChatOpenAI(
+    model="gpt-4o", 
     temperature=0.2,
     max_tokens=500,
-    mistral_api_key = MISTRAL_API_KEY
+    api_key=OPENAI_API_KEY
 )
 
-searx = SearxSearchWrapper(
-    searx_host="http://127.0.0.1:8089",
-    unsecure=True,
-    headers={"User-Agent": "Mozilla/5.0"},
+# CHANGED: Initialize TavilySearchResults instead of SearxSearchWrapper
+tavily = TavilySearchResults(
+    max_results=5
 )
 
 @tool
@@ -43,7 +45,8 @@ def search_fact_tool(claim: str) -> str:
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def _search_with_retry(claim: str) -> str:
         try:
-            results = searx.run(claim)
+            # CHANGED: Use tavily.invoke
+            results = tavily.invoke({"query": claim})
             print(results)
             return str(results)  # Limit context length
         except Exception as e:
@@ -62,6 +65,7 @@ def search_fact_tool(claim: str) -> str:
 
 @tool
 def extract_claims_tool(text: str) -> List[str]:
+    # ... (rest of the file remains the same) ...
     """
     Extract factual claims from a given text. Identifies verifiable statements
     that can be checked for accuracy.

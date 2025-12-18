@@ -10,8 +10,8 @@ import asyncio
 import re
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
-from langchain.prompts import PromptTemplate
-from langchain.schema import BaseOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.tools import tool
 from langchain_community.utilities import SearxSearchWrapper
 from langchain_mistralai import ChatMistralAI
@@ -319,17 +319,14 @@ async def main():
     # Test cases
     sample_texts = [
         """
-        The Eiffel Tower is located in Paris, France. It was built in 1889 and is 330 meters tall. 
-        Napoleon Bonaparte ordered its construction, which took exactly 2 years to complete.
-        The tower has 1665 steps to the top and was the tallest structure in the world until 1930.
+        "4th Stimulus Confirmed ($1600) (1) IRS Confirms New Stimulus Package"
         """,
-        
-        """
-        Climate change is primarily caused by human activities like burning fossil fuels. 
-        The Great Wall of China is visible from space with the naked eye. 
-        Humans only use 10% of their brain capacity. 
-        Vitamin C can prevent the common cold according to most medical studies.
-        """
+        # """
+        # Climate change is primarily caused by human activities like burning fossil fuels. 
+        # The Great Wall of China is visible from space with the naked eye. 
+        # Humans only use 10% of their brain capacity. 
+        # Vitamin C can prevent the common cold according to most medical studies.
+        # """
     ]
     
     for i, text in enumerate(sample_texts, 1):
