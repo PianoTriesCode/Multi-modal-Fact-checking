@@ -203,35 +203,66 @@ class ClaimVerifierAgent:
     """Agent for verifying claims using search evidence"""
     
     def __init__(self):
+        # Make sure you are using the new VERIFICATION_PROMPT from prompts.py
         self.chain = VERIFICATION_PROMPT | llm
     
-    async def verify_claim(self, context: str, claim: str) -> Dict[str, Any]:
+    async def verify_claim(self,context:str ,claim: str) -> Dict[str, Any]:
         """Verify a single claim"""
         logging.info(f"Verifying: {claim}")
         
         try:
-            # Get evidence using search tool
+            # Get evidence
             evidence = await search_fact_tool.ainvoke({"claim": claim})
             await asyncio.sleep(2)
-            # Analyze with verification chain
+            
+            # Analyze
+            # Note: You need to pass 'context' here if your prompt uses it. 
+            # If you don't have visual context for text-only claims, pass "N/A".
             verdict_response = await self.chain.ainvoke({
                 "claim": claim, 
                 "evidence": evidence,
-                "context": context
+                "context": context # Or pass actual context if available
             })
-            await asyncio.sleep(2)
             
-            verdict = verdict_response.content.strip()
-            confidence ="high" if verdict in ["True", "False"] else "medium"
+            # --- NEW PARSING LOGIC ---
+            raw_content = verdict_response.content.strip()
+            
+            # Default values
+            verdict = "Uncertain"
+            explanation = raw_content
+            
+            # safe extraction using keyword splitting
+            if "VERDICT:" in raw_content:
+                parts = raw_content.split("VERDICT:")
+                # Part 1 is usually empty or garbage, Part 2 has the verdict
+                after_verdict = parts[1]
+                
+                if "EXPLANATION:" in after_verdict:
+                    v_part, e_part = after_verdict.split("EXPLANATION:")
+                    verdict = v_part.strip().title() # "True" or "False"
+                    explanation = e_part.strip()
+                else:
+                    verdict = after_verdict.strip().title()
+            
+            # Fallback regex if the LLM forgot the prefix but outputted "True" or "False"
+            elif raw_content.lower().startswith("true"):
+                verdict = "True"
+            elif raw_content.lower().startswith("false"):
+                verdict = "False"
+            # -------------------------
+
+            confidence = "high" if verdict in ["True", "False"] else "medium"
+            
             return {
                 "claim": claim,
-                "verdict": verdict,
+                "verdict": verdict,   # Now cleanly "True" or "False"
                 "confidence": confidence,
-                "evidence_snippet": evidence[:200] + "..." if len(evidence) > 200 else evidence
+                "evidence_snippet": explanation[:500] # Store explanation as evidence/reasoning
             }
+            
         except Exception as e:
             logging.error(f"Verification failed for '{claim}': {e}")
-            return {"claim": claim, "verdict": f"Error: {str(e)}", "confidence": "low"}
+            return {"claim": claim, "verdict": "Error", "confidence": "low"}
         
 class RouterAgent:
     def __init__(self):

@@ -46,6 +46,7 @@ def search_fact_tool(claim: str) -> str:
     def _search_with_retry(claim: str) -> str:
         try:
             # CHANGED: Use tavily.invoke
+            claim = f"fact check: {claim}"
             results = tavily.invoke({"query": claim})
             print(results)
             return str(results)  # Limit context length

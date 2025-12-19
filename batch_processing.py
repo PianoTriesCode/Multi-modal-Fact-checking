@@ -7,6 +7,7 @@ from agents import FactCheckingAgentol
 
 # Configuration
 INPUT_EXCEL = "claims.xlsx"       # Your excel file
+
 OUTPUT_FILE = "fact_check_results.csv"
 
 async def process_batch():
