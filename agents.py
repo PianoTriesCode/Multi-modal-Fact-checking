@@ -14,6 +14,7 @@ from PIL import Image
 
 from tools import search_fact_tool, extract_claims_tool, llm
 from prompts import CLAIM_EXTRACTION_PROMPT, VERIFICATION_PROMPT
+from langchain_openai import ChatOpenAI
 
 class ClaimParser(BaseOutputParser):
     """Parse claims from LLM response"""
@@ -202,9 +203,10 @@ class ClaimExtractorAgent:
 class ClaimVerifierAgent:
     """Agent for verifying claims using search evidence"""
     
-    def __init__(self):
+    def __init__(self,model_name):
         # Make sure you are using the new VERIFICATION_PROMPT from prompts.py
-        self.chain = VERIFICATION_PROMPT | llm
+        self.llm = ChatOpenAI(model_name = model_name)
+        self.chain = VERIFICATION_PROMPT | self.llm
     
     async def verify_claim(self,context:str ,claim: str) -> Dict[str, Any]:
         """Verify a single claim"""
@@ -291,31 +293,58 @@ class RouterAgent:
 class FactCheckingAgentol:
     """Main fact-checking agent that orchestrates the pipeline"""
     
-    def __init__(self):
+    def __init__(self, model_name):
         self.router = RouterAgent()
         self.claim_extractor = ClaimExtractorAgent()
-        self.claim_verifier = ClaimVerifierAgent()
+        self.claim_verifier = ClaimVerifierAgent(model_name)
     
-    async def fact_check(self, input_data: Union[str,bytes]) -> Dict[str, Any]:
-        """Run the complete fact-checking pipeline"""
+# In agents.py
+
+    async def fact_check(self, input_data: Union[str,bytes], specific_claim: str = None) -> Dict[str, Any]:
+        """
+        Run the pipeline.
+        If specific_claim is provided (from Excel), we verify THAT claim directly using the input's context.
+        """
         start_time = time.time()
+        
+        # Step 0: Route input (Get Description/OCR or just text)
         route_result = self.router.handle(input_data)
-        print("Extracting claims...")
-        thing = route_result["content"]
-        claims = await self.claim_extractor.extract_claims(route_result["content"])
+        context_content = route_result["content"] # This is the Image Description or Raw Text
+        
+        # --- CHANGED LOGIC HERE ---
+        if specific_claim:
+            print(f"Using specific claim from dataset: '{specific_claim[:50]}...'")
+            # We treat the input content as "Context" for the verification
+            claims = [specific_claim]
+        else:
+            # Original behavior: Extract claims automatically
+            print("Extracting claims...")
+            claims = await self.claim_extractor.extract_claims(context_content)
+        # --------------------------
         
         if not claims:
-            return {
+             return {
                 "status": "error",
-                "message": "No claims could be extracted",
+                "message": "No claims found.",
                 "results": [],
                 "processing_time": time.time() - start_time
             }
         
-        print(f"Found {len(claims)} claims to verify")
-        print("Verifying claims...")
-        verification_tasks = [self.claim_verifier.verify_claim(thing,claim) for claim in claims]
-        results = await asyncio.gather(*verification_tasks, return_exceptions=True) #waits on all claims
+        # Determine Context for the Prompt
+        # If it was an image, the 'context_content' is the Description+OCR.
+        # If it was text, the 'context_content' is the text itself (or you can set it to N/A).
+        if route_result["type"] == "image":
+            verification_context = context_content
+        else:
+            # For text-only inputs, the claim usually IS the context, 
+            # but we can pass the raw input just in case.
+            verification_context = "Source Text: " + str(context_content)[:500]
+
+        print(f"Verifying {len(claims)} claim(s)...")
+        
+        # Pass the context to the verifier
+        verification_tasks = [self.claim_verifier.verify_claim(claim, verification_context) for claim in claims]
+        results = await asyncio.gather(*verification_tasks, return_exceptions=True)
         
         final_results = []
         for result in results:
@@ -324,11 +353,10 @@ class FactCheckingAgentol:
                 continue
             final_results.append(result)
         
-        summary = self._generate_summary(final_results)
+
         
         return {
             "status": "success",
-            "summary": summary,
             "results": final_results,
             "processing_time": time.time() - start_time,
             "claims_analyzed": len(final_results)

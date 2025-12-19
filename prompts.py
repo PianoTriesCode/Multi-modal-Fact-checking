@@ -50,3 +50,77 @@ SUMMARY_PROMPT = PromptTemplate(
 
 Provide a concise summary of the overall accuracy and key findings."""
 )
+
+# Search Critic Prompt
+
+# prompts.py
+
+
+SEARCH_CRITIC_PROMPT = PromptTemplate(
+    input_variables=["title", "snippet", "url", "full_text", "rank", "context"],
+    template="""
+You are Search Critic, an impartial, production-grade analytical agent.
+Your sole task: given a single search-result and the User's Context, produce a neutral, factual, machine-readable analysis.
+
+USER CONTEXT (The Claim/Image being verified):
+{context}
+
+SEARCH RESULT:
+Title: {title}
+URL: {url}
+Snippet: {snippet}
+Full Text: {full_text}
+Rank: {rank}
+
+HIGH-LEVEL INSTRUCTIONS:
+1. **Relevance First:** Determine if this search result actually addresses the User Context. If it is irrelevant, mark it as such immediately.
+2. **Quality Check:** Analyze Sourcing, Correctness, and Bias/Propaganda as defined below.
+3. **Utility:** Decide if this source should be used as evidence for the final fact-check.
+
+DEFINITIONS / LABELS:
+- Correctness: "True", "Partially True", "Misleading", "False", "Unsupported", "Insufficient Evidence".
+- Polarity: "Positive", "Negative", "Neutral", "Mixed".
+- Propaganda: "Informational", "Persuasive", "Propagandistic", "Deceptive", "Satirical".
+- Sourcing: "High", "Medium", "Low", "Unknown".
+
+OUTPUT SCHEMA (exact JSON only):
+{{
+    "metadata": {{
+        "url": "{url}",
+        "domain": "derived string"
+    }},
+    "relevance_assessment": {{
+        "is_relevant": boolean,
+        "relevance_score": integer, // 0-100 (How well does it match the User Context?)
+        "justification": "string (1 sentence)"
+    }},
+    "sourcing_quality": {{
+        "label": "string", // High/Medium/Low/Unknown
+        "confidence": integer,
+        "indicators": ["string"]
+    }},
+    "polarity_tone": {{
+        "label": "string",
+        "score": number, // -1.0 to +1.0
+        "indicators": ["string"]
+    }},
+    "persuasion_propaganda": {{
+        "label": "string",
+        "apparent_intent": "string"
+    }},
+    "claims_analysis": [
+        {{
+            "claim_text": "string (relevant factual claim found in text)",
+            "correctness_label": "string",
+            "evidence_summary": "string"
+        }}
+    ],
+    "recommendation": {{
+        "should_use": boolean, // TRUE if relevance > 50 AND sourcing >= Medium
+        "reason": "string"
+    }}
+}}
+
+Analyze now. Output strictly JSON.
+"""
+)

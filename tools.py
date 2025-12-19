@@ -48,7 +48,6 @@ def search_fact_tool(claim: str) -> str:
             # CHANGED: Use tavily.invoke
             claim = f"fact check: {claim}"
             results = tavily.invoke({"query": claim})
-            print(results)
             return str(results)  # Limit context length
         except Exception as e:
             logging.error(f"Search failed for '{claim}': {e}")

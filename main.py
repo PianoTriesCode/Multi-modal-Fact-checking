@@ -25,7 +25,7 @@ async def main():
     #     1.5 million Acres of Oklahoma farm, land sold to foreign investors public schools are being sold out to benefit wealthy and exclusive private schools in stairs 
     #     """
     # ]
-    sample_texts = ["Image5.png"]
+    sample_texts = ["ImageTest.jpeg"]
     
     for i, text in enumerate(sample_texts, 1):
         print(f"\n{'='*80}")
