@@ -20,19 +20,12 @@ async def main():
     fact_checker = FactCheckingAgentol()
     
     # Sample texts for testing
-    # sample_texts = [
-    #     """
-    #     The Eiffel Tower is located in Paris,France. It was built in 1889 and is 330 meters tall. 
-    #     Napoleon Bonaparte ordered its construction. The tower has exactly 1665 steps to the top.
-    #     """,
-    #     """
-    #     Climate change is primarily caused by human activities. 
-    #     The Great Wall of China is visible from space with the naked eye. 
-    #     Humans only use 10 percent of their brain capacity. 
-    #     Vitamin C can prevent the common cold.
-    #     """
-    # ]
-    sample_texts = ["sample1.jpg"]
+    sample_texts = [
+        """
+        1.5 million Acres of Oklahoma farm, land sold to foreign investors public schools are being sold out to benefit wealthy and exclusive private schools in stairs 
+        """
+    ]
+    # sample_texts = ["sample1.jpg"]
     
     for i, text in enumerate(sample_texts, 1):
         print(f"\n{'='*80}")

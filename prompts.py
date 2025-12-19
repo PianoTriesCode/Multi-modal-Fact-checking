@@ -2,7 +2,7 @@
 Prompt Templates for the Fact-Checking System
 """
 
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 CLAIM_EXTRACTION_PROMPT = PromptTemplate(
     input_variables=["text"],
@@ -17,7 +17,7 @@ Return ONLY the claims as a numbered list, one per line. No additional commentar
 # Verification Prompts
 VERIFICATION_PROMPT = PromptTemplate(
     input_variables=["claim", "evidence"],
-    template="""Based on the following search evidence, determine if the claim below is true, false, or uncertain.
+    template="""Based on the following search evidence, determine if the claim below is true or false.
 
 Claim: {claim}
 

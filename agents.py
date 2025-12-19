@@ -6,7 +6,7 @@ import asyncio
 import time
 import logging
 from typing import List, Dict, Union, Any
-from langchain_core.schema import BaseOutputParser
+from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.runnables import RunnableSequence
 import re
 from transformers import pipeline
@@ -142,7 +142,7 @@ class RouterAgent:
         else:
             return {"type": "text", "content": input_data}
         
-class FactCheckingAgentol:
+class FactCheckingAgentolOLD:
     """Main fact-checking agent that orchestrates the pipeline"""
     
     def __init__(self):
@@ -171,6 +171,73 @@ class FactCheckingAgentol:
         print("Verifying claims...")
         verification_tasks = [self.claim_verifier.verify_claim(claim) for claim in claims]
         results = await asyncio.gather(*verification_tasks, return_exceptions=True) #waits on all claims
+        
+        final_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                logging.error(f"Verification task failed: {result}")
+                continue
+            final_results.append(result)
+        
+        summary = self._generate_summary(final_results)
+        
+        return {
+            "status": "success",
+            "summary": summary,
+            "results": final_results,
+            "processing_time": time.time() - start_time,
+            "claims_analyzed": len(final_results)
+        }
+    
+    def _generate_summary(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate summary statistics"""
+        verdicts = [r["verdict"] for r in results]
+        
+        true_count = sum(1 for v in verdicts if "True" in v)
+        false_count = sum(1 for v in verdicts if "False" in v)
+        uncertain_count = sum(1 for v in verdicts if "Uncertain" in v)
+        error_count = len(verdicts) - true_count - false_count - uncertain_count
+        
+        return {
+            "total_claims": len(results),
+            "true_claims": true_count,
+            "false_claims": false_count,
+            "uncertain_claims": uncertain_count,
+            "errors": error_count,
+            "accuracy_score": (true_count / len(results)) if results else 0
+        }
+    
+class FactCheckingAgentol:
+    """Main fact-checking agent that orchestrates the pipeline"""
+    
+    def __init__(self):
+        self.router = RouterAgent()
+        self.claim_verifier = ClaimVerifierAgent()
+    
+    async def fact_check(self, input_data: Union[str,bytes]) -> Dict[str, Any]:
+        """Run the complete fact-checking pipeline"""
+        start_time = time.time()
+        
+        # Step 0: Route input (Handles Text directly, or extracts text from Audio/Image)
+        route_result = self.router.handle(input_data)
+        
+        # CHANGED: Instead of extracting claims, we treat the content as the claim itself.
+        # We wrap it in a list to match the structure expected by the verifier loop.
+        claim_text = route_result["content"]
+        claims = [claim_text] if claim_text.strip() else []
+        
+        if not claims:
+            return {
+                "status": "error",
+                "message": "No input provided",
+                "results": [],
+                "processing_time": time.time() - start_time
+            }
+        
+        print(f"Verifying claim: {claims[0]}")
+        
+        verification_tasks = [self.claim_verifier.verify_claim(claim) for claim in claims]
+        results = await asyncio.gather(*verification_tasks, return_exceptions=True)
         
         final_results = []
         for result in results:
