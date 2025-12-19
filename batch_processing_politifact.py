@@ -7,7 +7,7 @@ from agents import FactCheckingAgentol
 
 # Configuration
 INPUT_JSON = "politifact_factcheck_data.json" 
-OUTPUT_FILE = "fact_check_results_politifact.csv"
+OUTPUT_FILE = "fact_check_results_politifact_noSer.csv"
 
 async def process_batch():
     # 1. Load the Data from JSON
