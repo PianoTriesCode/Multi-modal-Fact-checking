@@ -44,30 +44,144 @@ class AudioAgent:
         result = self.transcriber(audio_path)
         return result["text"]
 
+# class ImageAgent:
+#     """Agent to handle image inputs and generate text descriptions."""
+
+#     def __init__(self):
+#         print("Loading image captioning model...")
+#         self.captioner = pipeline(
+#             "image-to-text",
+#             model="Salesforce/blip-image-captioning-base"
+#         )
+#         print("ImageAgent ready.")
+
+#     def describe(self, image_path: str) -> str:
+#         """Generate a description of the image."""
+#         try:
+#             image = Image.open(image_path)
+#             result = self.captioner(image)
+#             caption = result[0]['generated_text']
+#             print(f"[ImageAgent] Caption generated: {caption}")
+#             return caption
+#         except Exception as e:
+#             print(f"[ImageAgent] Error describing image: {e}")
+#             return "Error: Could not process image."
+
+
+# from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+# from PIL import Image
+
+# class ImageAgent:
+#     """Agent to handle image inputs and extract text using Hugging Face TrOCR."""
+
+#     def __init__(self):
+#         print("Loading Hugging Face OCR model (TrOCR)...")
+#         # We use the 'printed' version. Use 'microsoft/trocr-base-handwritten' for handwriting.
+#         self.processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-printed')
+#         self.model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-printed')
+#         print("ImageAgent (TrOCR) ready.")
+
+#     def describe(self, image_path: str) -> str:
+#         """Extract text from the image."""
+#         try:
+#             print(f"Extracting text from: {image_path} ...")
+#             image = Image.open(image_path).convert("RGB")
+            
+#             # Preprocess the image
+#             pixel_values = self.processor(images=image, return_tensors="pt").pixel_values
+            
+#             # Generate text
+#             generated_ids = self.model.generate(pixel_values)
+#             generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            
+#             if not generated_text.strip():
+#                 print("[ImageAgent] No text found.")
+#                 return ""
+                
+#             print(f"[ImageAgent] Text found: {generated_text}")
+#             return generated_text
+            
+#         except Exception as e:
+#             print(f"[ImageAgent] Error extracting text: {e}")
+#             return "Error: Could not process image."
+        
+    
+from transformers import AutoProcessor, AutoModelForCausalLM
+from PIL import Image
+import torch
+import logging
+
+from transformers import AutoProcessor, AutoModelForCausalLM
+from PIL import Image
+import torch
+import logging
+
 class ImageAgent:
-    """Agent to handle image inputs and generate text descriptions."""
+    """
+    Agent to handle image inputs using Microsoft Florence-2.
+    Extracts BOTH text (OCR) and visual descriptions.
+    """
 
     def __init__(self):
-        print("Loading image captioning model...")
-        self.captioner = pipeline(
-            "image-to-text",
-            model="Salesforce/blip-image-captioning-base"
+        print("Loading Florence-2 model...")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model_id = 'microsoft/Florence-2-base'
+        
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_id, 
+            trust_remote_code=True,
+            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+        ).to(self.device)
+        
+        self.processor = AutoProcessor.from_pretrained(
+            self.model_id, 
+            trust_remote_code=True
         )
-        print("ImageAgent ready.")
+        print(f"ImageAgent (Florence-2) ready on {self.device}.")
+
+    def _run_task(self, image, task_prompt):
+        """Helper to run a specific task on Florence-2"""
+        inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device, torch.float16 if self.device == "cuda" else torch.float32)
+        
+        generated_ids = self.model.generate(
+            input_ids=inputs["input_ids"],
+            pixel_values=inputs["pixel_values"],
+            max_new_tokens=1024,
+            num_beams=3,
+            do_sample=False
+        )
+        
+        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+        parsed_answer = self.processor.post_process_generation(
+            generated_text, 
+            task=task_prompt, 
+            image_size=(image.width, image.height)
+        )
+        return parsed_answer
 
     def describe(self, image_path: str) -> str:
-        """Generate a description of the image."""
+        """Extracts both visual description and text from the image."""
         try:
-            image = Image.open(image_path)
-            result = self.captioner(image)
-            caption = result[0]['generated_text']
-            print(f"[ImageAgent] Caption generated: {caption}")
-            return caption
+            print(f"Analyzing image: {image_path} ...")
+            image = Image.open(image_path).convert("RGB")
+            
+            # 1. Get Visual Description
+            description_result = self._run_task(image, "<MORE_DETAILED_CAPTION>")
+            visual_desc = description_result.get('<MORE_DETAILED_CAPTION>', '')
+            
+            # 2. Get Text (OCR)
+            ocr_result = self._run_task(image, "<OCR>")
+            raw_text = ocr_result.get('<OCR>', '')
+            
+            # Combine them into a context-rich string
+            final_output = f"{visual_desc}"
+            
+            print(f"[ImageAgent] Analysis complete.")
+            return final_output
+            
         except Exception as e:
-            print(f"[ImageAgent] Error describing image: {e}")
-            return "Error: Could not process image."
-
-
+            logging.error(f"[ImageAgent] Error: {e}")
+            return 
 class ClaimExtractorAgent:
     """Agent for extracting factual claims from text"""
     
@@ -91,7 +205,7 @@ class ClaimVerifierAgent:
     def __init__(self):
         self.chain = VERIFICATION_PROMPT | llm
     
-    async def verify_claim(self, claim: str) -> Dict[str, Any]:
+    async def verify_claim(self, context: str, claim: str) -> Dict[str, Any]:
         """Verify a single claim"""
         logging.info(f"Verifying: {claim}")
         
@@ -102,12 +216,13 @@ class ClaimVerifierAgent:
             # Analyze with verification chain
             verdict_response = await self.chain.ainvoke({
                 "claim": claim, 
-                "evidence": evidence
+                "evidence": evidence,
+                "context": context
             })
             await asyncio.sleep(2)
             
             verdict = verdict_response.content.strip()
-            confidence = "high" if verdict in ["True", "False"] else "medium"
+            confidence ="high" if verdict in ["True", "False"] else "medium"
             return {
                 "claim": claim,
                 "verdict": verdict,
@@ -142,7 +257,7 @@ class RouterAgent:
         else:
             return {"type": "text", "content": input_data}
         
-class FactCheckingAgentolOLD:
+class FactCheckingAgentol:
     """Main fact-checking agent that orchestrates the pipeline"""
     
     def __init__(self):
@@ -153,10 +268,9 @@ class FactCheckingAgentolOLD:
     async def fact_check(self, input_data: Union[str,bytes]) -> Dict[str, Any]:
         """Run the complete fact-checking pipeline"""
         start_time = time.time()
-        #Step 0 : Route input
         route_result = self.router.handle(input_data)
-        # Step 1: Extract claims
         print("Extracting claims...")
+        thing = route_result["content"]
         claims = await self.claim_extractor.extract_claims(route_result["content"])
         
         if not claims:
@@ -169,7 +283,7 @@ class FactCheckingAgentolOLD:
         
         print(f"Found {len(claims)} claims to verify")
         print("Verifying claims...")
-        verification_tasks = [self.claim_verifier.verify_claim(claim) for claim in claims]
+        verification_tasks = [self.claim_verifier.verify_claim(thing,claim) for claim in claims]
         results = await asyncio.gather(*verification_tasks, return_exceptions=True) #waits on all claims
         
         final_results = []
@@ -207,7 +321,7 @@ class FactCheckingAgentolOLD:
             "accuracy_score": (true_count / len(results)) if results else 0
         }
     
-class FactCheckingAgentol:
+class FactCheckingAgentolOLD:
     """Main fact-checking agent that orchestrates the pipeline"""
     
     def __init__(self):
@@ -224,7 +338,15 @@ class FactCheckingAgentol:
         # CHANGED: Instead of extracting claims, we treat the content as the claim itself.
         # We wrap it in a list to match the structure expected by the verifier loop.
         claim_text = route_result["content"]
+        if len(claim_text.strip()) < 10:
+             return {
+                "status": "error",
+                "message": f"Extracted text is too short to be a claim: '{claim_text}'",
+                "results": [],
+                "processing_time": time.time() - start_time
+            }
         claims = [claim_text] if claim_text.strip() else []
+        
         
         if not claims:
             return {

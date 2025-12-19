@@ -90,7 +90,7 @@ async def process_batch():
         results_data.append(row)
         
         # Optional: Save continuously (append mode) to avoid data loss
-        # pd.DataFrame([row]).to_csv(OUTPUT_FILE, mode='a', header=not os.path.exists(OUTPUT_FILE), index=False)
+        pd.DataFrame([row]).to_csv(OUTPUT_FILE, mode='a', header=not os.path.exists(OUTPUT_FILE), index=False)
 
     # 5. Final Save
     print(f"\nProcessing complete. Saving results to {OUTPUT_FILE}...")
